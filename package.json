@@ -1,5 +1,5 @@
 {
-  "name": "ra-data-opencrud",
+  "name": "@toosick/ra-data-opencrud",
   "version": "0.0.7",
   "description": "A Prisma/GraphCMS data provider for react-admin",
   "main": "dist/index.js",
