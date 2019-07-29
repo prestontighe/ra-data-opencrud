@@ -224,7 +224,7 @@ const buildObjectMutationData = ({
 
   const mutationType = hasConnect ? PRISMA_CONNECT : PRISMA_CREATE;
 
-  const fields = buildReferenceField({
+  const fields: any = buildReferenceField({
     inputArg,
     introspectionResults,
     typeName,
@@ -239,7 +239,7 @@ const buildObjectMutationData = ({
 
   // Else, connect the nodes
   return {
-    [key]: { [mutationType]: { ...fields } }
+    [key]: { [mutationType]: { ...(hasConnect ? { id: fields.id } : fields) } }
   };
 };
 
