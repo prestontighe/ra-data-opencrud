@@ -8,6 +8,7 @@ import {
   DELETE
 } from 'react-admin';
 import isObject from 'lodash/isObject';
+import {merge} from 'lodash';
 
 import getFinalType from './utils/getFinalType';
 import { computeFieldsToAddRemoveUpdate } from './utils/computeAddRemoveUpdate';
@@ -21,7 +22,6 @@ import {
 import {
   IntrospectionInputObjectType,
   IntrospectionObjectType,
-  IntrospectionType,
   IntrospectionNamedTypeRef
 } from 'graphql';
 import { IntrospectionResult, Resource } from './constants/interfaces';
@@ -215,17 +215,27 @@ const buildObjectMutationData = ({
   typeName: string;
   key: string;
 }) => {
-  const hasConnect = hasMutationInputType(
+  const hasConnect = !inputArg.create && !inputArg.update && hasMutationInputType(
     introspectionResults,
     typeName,
     key,
     PRISMA_CONNECT
   );
 
-  const mutationType = hasConnect ? PRISMA_CONNECT : PRISMA_CREATE;
+  let mutationType = '';
+  let finalInputArg = inputArg;
+  if (inputArg.create) {
+    mutationType = PRISMA_CREATE;
+    finalInputArg = inputArg.create
+  } else if (inputArg.update) {
+    mutationType = PRISMA_UPDATE;
+    finalInputArg = inputArg.update
+  } else {
+    mutationType = PRISMA_CONNECT
+  }
 
   const fields: any = buildReferenceField({
-    inputArg,
+    inputArg: finalInputArg,
     introspectionResults,
     typeName,
     field: key,
@@ -276,27 +286,29 @@ const buildUpdateVariables = (introspectionResults: IntrospectionResult) => (
       }
 
       if (Array.isArray(params.data[key])) {
-        //TODO: Make connect, disconnect and update overridable
-        //TODO: Make updates working
-        const {
-          fieldsToAdd,
-          fieldsToRemove /* fieldsToUpdate */
-        } = computeFieldsToAddRemoveUpdate(
-          params.previousData[`${key}Ids`],
-          params.data[`${key}Ids`]
-        );
+        if (inputType.kind !== 'SCALAR') {
+          //TODO: Make connect, disconnect and update overridable
+          //TODO: Make updates working
+          const {
+            fieldsToAdd,
+            fieldsToRemove /* fieldsToUpdate */
+          } = computeFieldsToAddRemoveUpdate(
+            params.previousData[`${key}Ids`],
+            params.data[`${key}Ids`]
+          );
 
-        return {
-          ...acc,
-          data: {
-            ...acc.data,
-            [key]: {
-              [PRISMA_CONNECT]: fieldsToAdd,
-              [PRISMA_DISCONNECT]: fieldsToRemove
-              //[PRISMA_UPDATE]: fieldsToUpdate
+          return {
+            ...acc,
+            data: {
+              ...acc.data,
+              [key]: {
+                [PRISMA_CONNECT]: fieldsToAdd,
+                [PRISMA_DISCONNECT]: fieldsToRemove
+                //[PRISMA_UPDATE]: fieldsToUpdate
+              }
             }
-          }
-        };
+          };
+        }
       }
 
       if (isObject(params.data[key])) {
@@ -324,7 +336,7 @@ const buildUpdateVariables = (introspectionResults: IntrospectionResult) => (
       ) as IntrospectionObjectType;
       const isInField = type.fields.find(t => t.name === key);
 
-      if (!!isInField) {
+      if (!!isInField || inputType.kind === 'SCALAR') {
         // Rest should be put in data object
         return {
           ...acc,
@@ -363,7 +375,7 @@ const buildCreateVariables = (introspectionResults: IntrospectionResult) => (
 
       const inputType = findInputFieldForType(
         introspectionResults,
-        `${resource.type.name}UpdateInput`,
+        `${resource.type.name}CreateInput`,
         key
       );
 
@@ -371,23 +383,25 @@ const buildCreateVariables = (introspectionResults: IntrospectionResult) => (
         return acc;
       }
       if (Array.isArray(params.data[key])) {
-        return {
-          ...acc,
-          data: {
-            ...acc.data,
-            [key]: {
-              [PRISMA_CONNECT]: params.data[`${key}Ids`].map((id: string) => ({
-                id
-              }))
+        if (inputType.kind !== 'SCALAR') {
+          return {
+            ...acc,
+            data: {
+              ...acc.data,
+              [key]: {
+                [PRISMA_CONNECT]: params.data[`${key}Ids`].map((id: string) => ({
+                  id
+                }))
+              }
             }
-          }
-        };
+          };
+        }
       }
 
       if (isObject(params.data[key])) {
         const inputType = findInputFieldForType(
           introspectionResults,
-          `${resource.type.name}UpdateInput`,
+          `${resource.type.name}CreateInput`,
           key
         );
 
@@ -418,7 +432,7 @@ const buildCreateVariables = (introspectionResults: IntrospectionResult) => (
       ) as IntrospectionObjectType;
       const isInField = type.fields.find(t => t.name === key);
 
-      if (isInField) {
+      if (!!isInField || inputType.kind === 'SCALAR') {
         // Rest should be put in data object
         return {
           ...acc,
@@ -454,9 +468,13 @@ export default (introspectionResults: IntrospectionResult) => (
     case GET_MANY_REFERENCE: {
       const parts = params.target.split('.');
 
-      return {
+      return merge({}, buildGetListVariables(introspectionResults)(
+        resource,
+        aorFetchType,
+        params
+      ), {
         where: { [parts[0]]: { id: params.id } }
-      };
+      });
     }
     case GET_ONE:
       return {
