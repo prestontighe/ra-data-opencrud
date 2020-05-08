@@ -6,7 +6,7 @@
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/weakky/ra-data-opencrud.git"
+    "url": "git+https://github.com/prestontighe/ra-data-opencrud.git"
   },
   "bugs": {
     "url": "https://github.com/weakky/ra-data-opencrud/issues"
